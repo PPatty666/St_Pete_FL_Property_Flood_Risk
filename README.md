@@ -1,4 +1,4 @@
-![](http://i.imgur.com/y8g506n.png?1)
+![Simple Conceptual Framework](https://github.com/PPatty666/St_Pete_FL_Property_Flood_Risk/blob/main/imgs/conceptual_framework.jpg?raw=true)
 
 # joe
 
