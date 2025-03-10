@@ -1,0 +1,511 @@
+---
+title: "property_model"
+author: "Patty_Zhu"
+date: "2024-10-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(sf)
+# library(tmap)
+library(here)
+library(jsonlite)
+library(tidyverse)
+library(httr)
+library(reshape2)
+library(tigris)
+
+library(rms)
+library(modelr)
+library(broom)
+library(sp)
+library(spdep)
+library(spatialreg)
+library(RColorBrewer)
+
+library(corrr)
+library(rmapshaper)
+library(flextable)
+library(car)
+library(stargazer)
+```
+
+
+```{r}
+property_st_pete <- read_csv('zillow_parcel_census_coast_flood_st_pete.csv') %>% 
+  select(-1)
+```
+```{r}
+colnames(property_st_pete)
+```
+
+```{r}
+max(property_st_pete$livingArea)
+```
+
+```{r}
+property_st_pete_mod <- property_st_pete %>% 
+  select(c("zpid", "latitude","longitude","price","bathrooms","bedrooms","livingArea",
+           "YEAR_BUILT","HEATING","POOL","EVAC_ZONE","hhinc_k", "flood_risk", "dist2coast")) %>% 
+  drop_na() %>% 
+  mutate(AGE = (2024 - YEAR_BUILT)) %>% 
+  mutate(HEATING = relevel(as.factor(HEATING), ref = "None")) %>% 
+  # factor(df$IUCN, levels = c("LC", "NT", "VU", "EN", "CR"), ordered = TRUE)
+  mutate(POOL2 = case_when(POOL == 'N' ~ 0,
+                           POOL == 'Y' ~ 1)) %>% 
+  # mutate(EVAC_ZONE2 = case_when(EVAC_ZONE == 'NON EVAC' ~ 0,
+  #                               EVAC_ZONE == 'E' ~ 1,
+  #                               EVAC_ZONE == 'D' ~ 2,
+  #                               EVAC_ZONE == 'C' ~ 3,
+  #                               EVAC_ZONE == 'B' ~ 4,
+  #                               EVAC_ZONE == 'A' ~ 5)) %>%
+  mutate(ZONE_A = ifelse(EVAC_ZONE == 'A', 1, 0)) %>% 
+  mutate(ZONE_B = ifelse(EVAC_ZONE == 'B', 1, 0)) %>% 
+  mutate(ZONE_C = ifelse(EVAC_ZONE == 'C', 1, 0)) %>% 
+  mutate(ZONE_D = ifelse(EVAC_ZONE == 'D', 1, 0)) %>% 
+  mutate(ZONE_E = ifelse(EVAC_ZONE == 'E', 1, 0)) %>% 
+  mutate(NON_EVAC = ifelse(EVAC_ZONE == 'NON EVAC', 1, 0)) %>% 
+  mutate(lg_price = log10(price)) %>% 
+  mutate(dist2coast_km = dist2coast/1000)  %>% 
+  mutate(flood_risk_exp = exp(flood_risk)) %>%
+  mutate(flood_risk_quadratic = flood_risk^2) %>% 
+  mutate(flood_risk_copy = flood_risk) %>% 
+  # mutate(lg_livingArea = log10(livingArea))
+  mutate_at(c('AGE','livingArea', 'hhinc_k', 'dist2coast_km', 'flood_risk', 'flood_risk_exp', 'flood_risk_quadratic'),
+  ~(scale(.) %>% as.vector))
+```
+
+```{r}
+summary(property_st_pete_mod$flood_risk)
+```
+
+```{r}
+# ols model
+olsmod1 = lm(lg_price ~ bathrooms + livingArea + POOL2 + 
+               flood_risk + dist2coast_km +
+               hhinc_k, 
+             data=property_st_pete_mod)
+
+summary(olsmod1)
+```
+
+```{r}
+# ols model
+olsmod2 = lm(lg_price ~ bathrooms + livingArea + POOL2 + 
+               flood_risk + flood_risk_quadratic + dist2coast_km +
+               hhinc_k, 
+             data=property_st_pete_mod)
+
+summary(olsmod2)
+```
+
+```{r}
+anova(olsmod1, olsmod2)
+```
+
+
+```{r}
+# ols model
+olsmod3 = lm(lg_price ~ bathrooms + livingArea + POOL2 + 
+               dist2coast_km + ZONE_A + ZONE_B + ZONE_C + ZONE_D + ZONE_E + 
+               hhinc_k, 
+             data=property_st_pete_mod)
+
+summary(olsmod3)
+```
+
+```{r}
+# ols model
+olsmod4 = lm(lg_price ~ bathrooms + livingArea + POOL2 + 
+               dist2coast_km + flood_risk + flood_risk_quadratic +
+               ZONE_A + ZONE_B + ZONE_C + ZONE_D + ZONE_E + 
+               hhinc_k, 
+             data=property_st_pete_mod)
+
+summary(olsmod4)
+```
+
+```{r}
+anova(olsmod2, olsmod4)
+```
+
+
+```{r}
+actual_data <- property_st_pete_mod %>% 
+  select('bathrooms', 'livingArea', 'POOL2', 
+         'dist2coast_km', 'flood_risk', 'flood_risk_quadratic', 
+         'ZONE_A', 'ZONE_B', 'ZONE_C', 'ZONE_D', 'ZONE_E', 
+         'hhinc_k')
+```
+
+```{r}
+pred_actual_poly <- predict(olsmod4, actual_data, se=T)
+```
+
+```{r}
+pred_no_flood_risk_poly <- olsmod4$coefficients[1] + 
+                      olsmod4$coefficients[2] * property_st_pete_mod$bathrooms +
+                      olsmod4$coefficients[3] * property_st_pete_mod$livingArea +
+                      olsmod4$coefficients[4] * property_st_pete_mod$POOL2 +
+                      olsmod4$coefficients[5] * property_st_pete_mod$dist2coast_km +
+                      olsmod4$coefficients[8] * property_st_pete_mod$ZONE_A +
+                      olsmod4$coefficients[9] * property_st_pete_mod$ZONE_B +
+                      olsmod4$coefficients[10] * property_st_pete_mod$ZONE_C +
+                      olsmod4$coefficients[11] * property_st_pete_mod$ZONE_D +
+                      olsmod4$coefficients[12] * property_st_pete_mod$ZONE_E +
+                      olsmod4$coefficients[13] * property_st_pete_mod$hhinc_k
+```
+
+```{r}
+pred_flood_risk_poly <- pred_actual_poly$fit - pred_no_flood_risk_poly
+```
+
+```{r}
+x <- property_st_pete_mod$flood_risk_copy
+f_x <- pred_flood_risk_poly
+f_true <- property_st_pete_mod$lg_price - pred_no_flood_risk_poly
+plot(x, f_true, xlim=range(x), ylim=range(f_true), xlab="flood_risk", ylab="lg_price", 
+     main = "property value vs. flood risk",pch=16)
+lines(x[order(x)], f_x[order(x)], xlim=range(x), ylim=range(f_x), pch=16)
+```
+
+```{r}
+library(splines)
+library(Ecdat)
+```
+
+
+```{r}
+summary(property_st_pete_mod$flood_risk)
+```
+
+```{r}
+knot_mid <- (max(property_st_pete_mod$flood_risk) + min(property_st_pete_mod$flood_risk))/2
+```
+
+```{r}
+knot_left <- ((max(property_st_pete_mod$flood_risk) + min(property_st_pete_mod$flood_risk))/2 + min(property_st_pete_mod$flood_risk))/2
+```
+
+```{r}
+knot_right <- ((max(property_st_pete_mod$flood_risk) + min(property_st_pete_mod$flood_risk))/2 + max(property_st_pete_mod$flood_risk))/2
+```
+
+```{r}
+spline_mod <-  lm(lg_price ~ bathrooms + livingArea + POOL2 + 
+               dist2coast_km + bs(flood_risk, knots = c(knot_left, knot_mid, knot_right), degree=3)+
+               # ZONE_A + ZONE_B + ZONE_C + ZONE_D + ZONE_E + 
+               hhinc_k, 
+             data=property_st_pete_mod)
+```
+
+```{r}
+summary(spline_mod)
+```
+
+```{r}
+spline_mod_basis <- spline_mod[["model"]][["bs(flood_risk, knots = c(knot_left, knot_mid, knot_right), degree = 3)"]] %>% 
+  as_tibble() %>% 
+  rename(b1 = 1, b2=2, b3 = 3, b4 = 4, b5 = 5, b6 = 6) %>%
+  mutate(flood_risk = property_st_pete_mod$flood_risk_copy) %>% 
+  mutate(lat = property_st_pete_mod$latitude) %>% 
+  mutate(lon = property_st_pete_mod$longitude) %>% 
+  mutate(b5_6combo = b5 + b6)
+```
+
+```{r}
+colnames(spline_mod_basis)
+```
+
+
+```{r}
+spline_mod_basis %>% 
+  # select("b2", "flood_risk") %>%
+  arrange(flood_risk) %>%
+  
+  # filter(b2 > 0) %>%
+  filter(b5_6combo > 0.5) 
+  # filter(b1 == 0) %>%
+  # filter(b2 == 0) %>% 
+  # filter(b3 == 0) %>%
+  # filter(b4 == 0) %>%
+  
+```
+
+```{r}
+spline_mod_combo <-  lm(lg_price ~ bathrooms + livingArea + POOL2 + 
+               dist2coast_km + bs(flood_risk, knots = c(knot_left, knot_mid, knot_right), degree=3)+
+               ZONE_A + ZONE_B + ZONE_C + ZONE_D + ZONE_E + 
+               hhinc_k, 
+             data=property_st_pete_mod)
+```
+
+```{r}
+summary(spline_mod_combo)
+```
+
+```{r}
+spline_mod_combo_basis <- spline_mod_combo[["model"]][["bs(flood_risk, knots = c(knot_left, knot_mid, knot_right), degree = 3)"]] %>% 
+  as_tibble() %>% 
+  rename(b1 = 1, b2=2, b3 = 3, b4 = 4, b5 = 5, b6 = 6) %>%
+  mutate(flood_risk = property_st_pete_mod$flood_risk_copy) %>% 
+  mutate(lat = property_st_pete_mod$latitude) %>% 
+  mutate(lon = property_st_pete_mod$longitude) %>% 
+  mutate(b5_6combo = b5 + b6)
+```
+
+```{r}
+colnames(spline_mod_combo_basis)
+```
+
+
+```{r}
+spline_mod_combo_basis %>% 
+  # select("b2", "flood_risk") %>%
+  arrange(flood_risk) %>%
+  
+  # filter(b2 > 0) %>%
+  filter(b5_6combo > 0.5) 
+  # filter(b1 == 0) %>%
+  # filter(b2 == 0) %>% 
+  # filter(b3 == 0) %>%
+  # filter(b4 == 0) %>%
+  
+```
+
+```{r}
+pred_actual <- predict(spline_mod, actual_data, se=T)
+```
+
+```{r}
+pred_no_flood_risk <- spline_mod$coefficients[1] + 
+                      spline_mod$coefficients[2] * property_st_pete_mod$bathrooms +
+                      spline_mod$coefficients[3] * property_st_pete_mod$livingArea +
+                      spline_mod$coefficients[4] * property_st_pete_mod$POOL2 +
+                      spline_mod$coefficients[5] * property_st_pete_mod$dist2coast_km +
+                      # spline_mod$coefficients[12] * property_st_pete_mod$ZONE_A +
+                      # spline_mod$coefficients[13] * property_st_pete_mod$ZONE_B +
+                      # spline_mod$coefficients[14] * property_st_pete_mod$ZONE_C +
+                      # spline_mod$coefficients[15] * property_st_pete_mod$ZONE_D +
+                      # spline_mod$coefficients[16] * property_st_pete_mod$ZONE_E +
+                      spline_mod$coefficients[12] * property_st_pete_mod$hhinc_k 
+```
+
+```{r}
+pred_actual <- predict(spline_mod_combo, actual_data, se=T)
+
+pred_no_flood_risk <- spline_mod_combo$coefficients[1] + 
+                      spline_mod_combo$coefficients[2] * property_st_pete_mod$bathrooms +
+                      spline_mod_combo$coefficients[3] * property_st_pete_mod$livingArea +
+                      spline_mod_combo$coefficients[4] * property_st_pete_mod$POOL2 +
+                      spline_mod_combo$coefficients[5] * property_st_pete_mod$dist2coast_km +
+                      spline_mod_combo$coefficients[12] * property_st_pete_mod$ZONE_A +
+                      spline_mod_combo$coefficients[13] * property_st_pete_mod$ZONE_B +
+                      spline_mod_combo$coefficients[14] * property_st_pete_mod$ZONE_C +
+                      spline_mod_combo$coefficients[15] * property_st_pete_mod$ZONE_D +
+                      spline_mod_combo$coefficients[16] * property_st_pete_mod$ZONE_E +
+                      spline_mod_combo$coefficients[17] * property_st_pete_mod$hhinc_k 
+```
+
+```{r}
+pred_flood_risk <- pred_actual$fit - pred_no_flood_risk
+```
+
+```{r}
+x <- property_st_pete_mod$flood_risk_copy
+f_x <- pred_flood_risk
+f_true <- property_st_pete_mod$lg_price - pred_no_flood_risk
+plot(x, f_true, xlim=range(x), ylim=range(f_true), xlab="flood_risk", ylab="lg_price", 
+     main = "property value vs. flood risk",pch=16)
+lines(x[order(x)], f_x[order(x)], xlim=range(x), ylim=range(f_x), pch=16)
+abline(v=0.8208033, col="blue")
+# abline(v=0.2042665, col="purple")
+# abline(v=0.3452747, col="purple")
+# abline(h = 0, col = "orange") 
+
+```
+
+```{r}
+impacted_properties <- property_st_pete_mod %>% 
+  select("zpid", "latitude","longitude","flood_risk_copy") %>% 
+  mutate(pred_flood_risk = pred_flood_risk)
+```
+
+```{r}
+write_csv(impacted_properties, 'impacted_properties_whole_combo.csv')
+```
+
+```{r}
+spline_mod_natural = lm(lg_price ~ bathrooms + livingArea + POOL2 + 
+               dist2coast_km + ns(flood_risk, knots = c(-0.15, 0.49, 1.12))+
+               ZONE_A + ZONE_B + ZONE_C + ZONE_D + ZONE_E + 
+               hhinc_k, 
+             data=property_st_pete_mod)
+```
+
+```{r}
+summary(spline_mod_natural)
+```
+
+```{r}
+pred_actual_natural <- predict(spline_mod_natural, actual_data, se=T)
+```
+
+```{r}
+pred_no_flood_risk_natural <- spline_mod_natural$coefficients[1] + 
+                      spline_mod_natural$coefficients[2] * property_st_pete_mod$bathrooms +
+                      spline_mod_natural$coefficients[3] * property_st_pete_mod$livingArea +
+                      spline_mod_natural$coefficients[4] * property_st_pete_mod$POOL2 +
+                      spline_mod_natural$coefficients[5] * property_st_pete_mod$dist2coast_km +
+                      spline_mod_natural$coefficients[10] * property_st_pete_mod$ZONE_A +
+                      spline_mod_natural$coefficients[11] * property_st_pete_mod$ZONE_B +
+                      spline_mod_natural$coefficients[12] * property_st_pete_mod$ZONE_C +
+                      spline_mod_natural$coefficients[13] * property_st_pete_mod$ZONE_D +
+                      spline_mod_natural$coefficients[14] * property_st_pete_mod$ZONE_E +
+                      spline_mod_natural$coefficients[15] * property_st_pete_mod$hhinc_k 
+```
+
+```{r}
+pred_flood_risk_natural <- pred_actual_natural$fit - pred_no_flood_risk_natural
+```
+
+```{r}
+x <- property_st_pete_mod$flood_risk_copy
+f_x <- pred_flood_risk_natural
+plot(x, f_x, xlim=range(x), ylim=range(f_x), xlab="flood_risk", ylab="lg_price", 
+     main = "property value vs. flood risk",pch=16)
+lines(x[order(x)], f_x[order(x)], xlim=range(x), ylim=range(f_x), pch=16)
+```
+
+```{r}
+sk <- function(x,xi_k){
+  xi_1 <- (-0.15) #first knot
+  xi_K_1 <- 0.49 #second to the last knot
+  xi_K <- 1.12 #last knot
+  dk<-((x-xi_k)^3*(x>=xi_k)-(x-xi_K)^3*(x>=xi_K))/(xi_K-xi_k)
+  dK_1<-((x-xi_K_1)^3*(x>=xi_K_1)-(x-xi_K)^3*(x>=xi_K))/(xi_K-xi_K_1)
+  sk<-(xi_K-xi_k)*(dk-dK_1)/(xi_K-xi_1)^2 # scaled sk
+  return(sk)
+  }
+```
+
+```{r}
+s1 <- sk(property_st_pete_mod$flood_risk,-0.15)
+property_st_pete_mod_new <- cbind(property_st_pete_mod,s1)
+```
+
+```{r}
+# ols model
+spline_natural_hand = lm(lg_price ~ bathrooms + livingArea + POOL2 + 
+               dist2coast_km + flood_risk + s1 +
+               ZONE_A + ZONE_B + ZONE_C + ZONE_D + ZONE_E + 
+               hhinc_k, 
+             data=property_st_pete_mod_new)
+
+summary(spline_natural_hand)
+```
+```{r}
+s2 <- -(spline_natural_hand$coefficients[7] * (1.12 + 0.15)/(1.12 - 0.49))
+```
+
+```{r}
+s3 <- -s1-s2
+```
+
+```{r}
+spline_full_natural <- ols(lg_price ~ bathrooms + livingArea + POOL2 + 
+                             dist2coast_km + rcs(flood_risk,parms=c(-0.15, 0.49, 1.12)) + 
+                             ZONE_A + ZONE_B + ZONE_C + ZONE_D + ZONE_E + 
+                             hhinc_k, 
+                           data=property_st_pete_mod)
+spline_full_natural
+```
+
+```{r}
+spline_full_natural$coefficients
+```
+
+```{r}
+pred_actual_full_natural <- predict(spline_full_natural, actual_data, se=T)
+```
+
+```{r}
+pred_no_flood_risk_full_natural <- spline_full_natural$coefficients[1] + 
+                      spline_full_natural$coefficients[2] * property_st_pete_mod$bathrooms +
+                      spline_full_natural$coefficients[3] * property_st_pete_mod$livingArea +
+                      spline_full_natural$coefficients[4] * property_st_pete_mod$POOL2 +
+                      spline_full_natural$coefficients[5] * property_st_pete_mod$dist2coast_km +
+                      spline_full_natural$coefficients[8] * property_st_pete_mod$ZONE_A +
+                      spline_full_natural$coefficients[9] * property_st_pete_mod$ZONE_B +
+                      spline_full_natural$coefficients[10] * property_st_pete_mod$ZONE_C +
+                      spline_full_natural$coefficients[11] * property_st_pete_mod$ZONE_D +
+                      spline_full_natural$coefficients[12] * property_st_pete_mod$ZONE_E +
+                      spline_full_natural$coefficients[13] * property_st_pete_mod$hhinc_k
+```
+
+
+```{r}
+pred_flood_risk_full_natural <- pred_actual_full_natural$linear.predictors - pred_no_flood_risk_full_natural
+```
+
+```{r}
+x <- property_st_pete_mod$flood_risk_copy
+f_x1 <- pred_flood_risk_natural
+f_x2 <- pred_flood_risk_full_natural
+
+# Plot with varying point sizes and colors
+plot(x, f_x1, xlim=range(x), ylim=range(f_x1, f_x2), 
+     xlab="flood_risk", ylab="lg_price", 
+     main="Property Value vs. Flood Risk", 
+     pch=16, col=rgb(0.2, 0.4, 0.8, 0.6), cex=1.5)
+points(x, f_x2, pch=16, col=rgb(0.8, 0.2, 0.4, 0.6), cex=1.2)
+
+# Adding lines with different colors and line widths
+lines(x[order(x)], f_x1[order(x)], col="blue", lwd=2)
+lines(x[order(x)], f_x2[order(x)], col="red", lwd=2)
+
+# Adding a legend for clarity
+legend("topright", legend=c("f_x1", "f_x2"), 
+       col=c("blue", "red"), lty=1, lwd=2, pch=16, 
+       pt.cex=c(1.5, 1.2), bty="n")
+
+```
+
+
+```{r}
+property_st_pete_sf <- st_as_sf(property_st_pete_mod, coords = c("longitude","latitude")) %>%
+  st_set_crs(., 4326)
+```
+
+```{r}
+# dependent variables are spatial-correlated??
+tmap_mode("view")
+tm_shape(property_st_pete_sf) +
+  tm_dots(col = "price",
+          style="quantile",
+          palette="Spectral",
+          size = 0.1)
+```
+
+```{r}
+summarize_olsmod2 <- property_st_pete_sf %>% 
+  add_predictions(olsmod3, var="olspred") %>% 
+  add_residuals(olsmod3, var="olserror") 
+
+```
+
+```{r}
+# residuals are actual-predicted
+tmap_mode("view")
+tm_shape(summarize_olsmod2) +
+  tm_dots("olserror", 
+          style="quantile",
+          palette="Spectral",
+          size=0.1)
+```
+
