@@ -2,16 +2,18 @@
 
 # Does Hurricane induced flood risk impact property values in St. Petersburg, FL?
 
-This is a working project. We are currently figuring out the nuanced impact of Hurricance induced flood risk on property values in a coastal city. 
+We are wrapping up this project!
 
-You are very welcome to look at our model structures and give comments!
+We found spatial heterogeneous effect of Hurricane-based flood risk within the same High-risk flood zone!
+
+Please check the different type of models in the folder. For probabilistic model, the Bayesian Statistical Model shows more explainable results. 
 
 # Author
 Patty(Mengjue) Zhu (mzhu356@gatech.edu)
 Subhrajit Guhathakurta (subhro.guha@design.gatech.edu)
 Barnali Dixon (bdixon@usf.edu)
 
-![](https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExNnpqc2k4aHZ1eDY0MHV5a2t3c3Mxa2Zsdmd5cDl6OWl6cWQzcTExNCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT5LMJOsH2l8ZwETTO/giphy.gif)
+![](https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExejRwZmVraW43bGFwNHg3bGpvMzR3em50NzZzOGFyaW5veXRwNTQ4MCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/VhRK9ZABipMLRy7JM6/giphy.gif)
 
 <!-- # ![WebApp](https://iharsh234.github.io/WebApp/images/demo/demo_landing.JPG)
 # WebApp
