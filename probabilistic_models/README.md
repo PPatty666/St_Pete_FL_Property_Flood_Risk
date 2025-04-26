@@ -1,12 +1,12 @@
 # Working progress to improve the current Gaussian Process model
 
-We want to add one more variable (waterfront) in the linear part, however, based on the sampling results from our last experiment, we got a small portion of divergence at the beginning of our first chain.
+We want to add one more variable (waterfront) to the linear part. However, based on the sampling results from our last experiment, we observed a small amount of divergence at the beginning of our first chain.
 
-The current thought is that this issue can be solved by increasing the number of burn-in samples.
+Our current thought is that this issue can be addressed by increasing the number of burn-in samples.
 
-However, we are also kind of worried if the General Additive Model with Gaussian components will make sampling process exponentially challenging for each additional variable in the linear part. (Although waterfront is possibly the last variable we want to add)
+However, we are also somewhat concerned that adding more variables to the linear part of the General Additive Model with Gaussian components could make the sampling process exponentially more challenging. (Although waterfront is likely the last variable we plan to add.)
 
-We will ask our questions in the probabilistic modelling community can keep updating our work here!
+We will ask our questions in the probabilistic modeling community and continue to update our work here!
 
 
 ![](https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExdDFvamY4N3Y1dGIzMDdvZWZqNTA0aWdydDV2eTlzYndkNXhzcmh0cCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o6Mb6SWEyKAInmLkI/giphy.gif)

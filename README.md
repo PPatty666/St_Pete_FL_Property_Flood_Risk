@@ -4,9 +4,10 @@
 
 We are wrapping up this project!
 
-We found spatial heterogeneous effect of Hurricane-based flood risk within the same High-risk flood zone!
+We found a spatially heterogeneous effect of hurricane-based flood risk within the same high-risk flood zone.
 
-Please check the different type of models in the folder. For probabilistic model, the Bayesian Statistical Model shows more explainable results. 
+Please check the different types of models in the folder. For the probabilistic models, the Bayesian statistical model shows more explainable results.
+
 
 # Author
 Patty(Mengjue) Zhu (mzhu356@gatech.edu)
