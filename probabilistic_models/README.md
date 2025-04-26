@@ -1,4 +1,4 @@
-# Working progress to improve the current Gaussian Process model
+# Improving the current Gaussian Process model
 
 We want to add one more variable (waterfront) to the linear part. However, based on the sampling results from our last experiment, we observed a small amount of divergence at the beginning of our first chain.
 
